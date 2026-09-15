@@ -82,8 +82,13 @@ export const TldrawAgentAppProvider = memo(function TldrawAgentAppProvider({
 		// Load persisted state first (this will create agents from persisted data)
 		instance.persistence.loadState()
 
-		// Seed the academic case only on a genuinely blank canvas. Existing user work is preserved.
+		// Blank canvases are seeded; the untouched first seed is upgraded in place.
 		createSupplyChainDiagram(editor)
+		if (import.meta.hot) {
+			import.meta.hot.accept('../diagram/createSupplyChainDiagram', (updated) => {
+				updated?.createSupplyChainDiagram(editor)
+			})
+		}
 
 		// Ensure at least one agent exists (creates one if none were loaded)
 		const defaultAgent = instance.agents.ensureAtLeastOneAgent()

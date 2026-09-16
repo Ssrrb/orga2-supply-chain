@@ -35,7 +35,7 @@ function isUnmodifiedSeed(editor: Editor, seed: readonly SeedSignature[]) {
 		const actual = byId.get(expected.id as ReturnType<typeof createShapeId>)
 		if (!actual || actual.type !== expected.type || actual.x !== expected.x || actual.y !== expected.y) return false
 		return Object.entries(expected.props).every(([key, value]) => {
-			const wanted = key === 'richText' ? toRichText(value as string) : value
+			const wanted = key === 'richText' && typeof value === 'string' ? toRichText(value) : value
 			return JSON.stringify((actual.props as unknown as Record<string, unknown>)[key]) === JSON.stringify(wanted)
 		})
 	})
@@ -44,12 +44,6 @@ function isUnmodifiedSeed(editor: Editor, seed: readonly SeedSignature[]) {
 /** Case facts come from pages 1–2; traceability and feedback are labeled proposals. */
 export function createSupplyChainDiagram(editor: Editor) {
 	const existing = editor.getCurrentPageShapes()
-	const upgradeSeed = existing.length > 0 && (
-		isUnmodifiedSeed(editor, legacySupplyChainSeed as readonly SeedSignature[]) ||
-		isUnmodifiedSeed(editor, detailedSupplyChainSeedV1 as readonly SeedSignature[])
-	)
-	if (existing.length > 0 && !upgradeSeed) return false
-
 	const shapes: TLShapePartial[] = [
 		box('system-boundary', 70, 350, 3650, 1270, '', 'grey', 'none', 'dashed'),
 		box('supply-area', 110, 390, 1120, 1190, '', 'blue'),
@@ -141,19 +135,41 @@ export function createSupplyChainDiagram(editor: Editor) {
 		text('legend', 100, 1970, 'Sólido y color de cadena: flujo físico   ·   Gris discontinuo: información/insumos   ·   Rojo discontinuo: control y retroalimentación', 3450, 's', 'grey'),
 		text('case-note', 100, 2020, 'Hechos del caso: pasos, actores y productos. Propuestas analíticas: codificación, registro de eventos y bucles de retroalimentación.', 3500, 's', 'grey'),
 	]
+	const traceShapes: TLShapePartial[] = [
+		text('trace-title', 135, 2130, 'TRAZABILIDAD DEL LOTE · PROPUESTA', 3200, 'l', 'grey'),
+		box('trace-origin', 135, 2220, 500, 125, 'Lote de origen\nrefinería y compra', 'blue'),
+		box('trace-transfer', 745, 2220, 500, 125, 'Buque · alije\nbarcaza', 'blue'),
+		box('trace-receipt', 1355, 2220, 500, 125, 'Recepción\ntanque en San Antonio', 'orange'),
+		box('trace-formula', 1965, 2220, 500, 125, 'Mezcla · insumos\nfórmula y ensayo', 'orange'),
+		box('trace-final', 2575, 2220, 500, 125, 'Código de lote final\nliberación', 'orange'),
+		box('trace-delivery', 3185, 2220, 500, 125, 'Cisterna · entrega\nestación / empresa', 'green'),
+		arrow('trace-a1', 635, 2282, 110, 0, 'blue'),
+		arrow('trace-a2', 1245, 2282, 110, 0, 'blue'),
+		arrow('trace-a3', 1855, 2282, 110, 0, 'orange'),
+		arrow('trace-a4', 2465, 2282, 110, 0, 'orange'),
+		arrow('trace-a5', 3075, 2282, 110, 0, 'green'),
+		text('trace-lookup', 135, 2400, 'Cada transferencia conserva lote y cantidad · Consulta inversa: destino → cisterna → lote final → insumos y origen', 3520, 'm', 'grey'),
+	]
+	const upgradeSeed = existing.length > 0 && (
+		isUnmodifiedSeed(editor, legacySupplyChainSeed as readonly SeedSignature[]) ||
+		isUnmodifiedSeed(editor, detailedSupplyChainSeedV1 as readonly SeedSignature[])
+	)
+	const appendTrace = existing.length > 0 && isUnmodifiedSeed(editor, shapes as readonly SeedSignature[])
+	if (existing.length > 0 && !upgradeSeed && !appendTrace) return false
 
 	// Phase backgrounds, connectors, cards, then standalone text. Cards mask any
 	// unavoidable connector crossings, so no arrow is drawn over a card label.
+	const allShapes = appendTrace ? traceShapes : [...shapes, ...traceShapes]
 	const orderedShapes = [
-		...shapes.slice(0, 4),
-		...shapes.filter((shape) => shape.type === 'arrow'),
-		...shapes.slice(4).filter((shape) => shape.type === 'geo'),
-		...shapes.filter((shape) => shape.type === 'text'),
+		...allShapes.slice(0, appendTrace ? 0 : 4),
+		...allShapes.filter((shape) => shape.type === 'arrow'),
+		...allShapes.slice(appendTrace ? 0 : 4).filter((shape) => shape.type === 'geo'),
+		...allShapes.filter((shape) => shape.type === 'text'),
 	]
 	editor.run(() => {
 		if (upgradeSeed) editor.deleteShapes(existing.map((shape) => shape.id))
 		editor.createShapes(orderedShapes)
-		editor.sendToBack([createShapeId('system-boundary')])
+		if (!appendTrace) editor.sendToBack([createShapeId('system-boundary')])
 	})
 	editor.zoomToFit({ animation: { duration: 500 } })
 	return true
